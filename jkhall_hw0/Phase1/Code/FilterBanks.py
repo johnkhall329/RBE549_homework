@@ -18,11 +18,11 @@ img_folder = os.path.abspath(os.path.join(os.path.abspath(__file__), '../../Imag
 
 np.set_printoptions(precision=2)
 
-def generate_oriented_DoG_filters(size, scales, orientations, sigma=SIGMA, display=False):
+def generate_oriented_DoG_filters(size, sigmas, orientations, sigma=SIGMA, display=False):
     bank = []
 
-    for scale in range(1,scales+1):
-        g = cv2.getGaussianKernel(size, sigma**scale)
+    for sigma in sigmas:
+        g = cv2.getGaussianKernel(size, sigma)
         g = g @ g.T
         g /= np.linalg.norm(g)
         DoGx = cv2.filter2D(g, -1, sobelx)
@@ -34,7 +34,7 @@ def generate_oriented_DoG_filters(size, scales, orientations, sigma=SIGMA, displ
             bank.append(DoG)
 
     if display:
-        fig, axes = plt.subplots(nrows=scales, ncols=orientations)
+        fig, axes = plt.subplots(nrows=len(sigmas), ncols=orientations)
         fig.suptitle(f"Oriented DoG Filter Bank")
         for ax, filter in zip(axes.flatten(), bank):
             resized_filter = cv2.resize(filter, (200,200))
@@ -46,9 +46,9 @@ def generate_oriented_DoG_filters(size, scales, orientations, sigma=SIGMA, displ
 
     return bank
 
-def generate_LMS_and_LML_filters(size, display=False):
-    LMS_bank = generate_LM_filters(size, 1, display)
-    LML_bank = generate_LM_filters(size, SIGMA, display)
+def generate_LM_filters(size, display=False):
+    LMS_bank = LM(size, 1, display)
+    LML_bank = LM(size, SIGMA, display)
 
     if display:
         fig, axes = plt.subplots(nrows=8, ncols=12)
@@ -62,7 +62,7 @@ def generate_LMS_and_LML_filters(size, display=False):
         plt.show()
     return LMS_bank+LML_bank
 
-def generate_LM_filters(size, scale=1, display=False):
+def LM(size, scale=1, display=False):
     LM_bank = []
     DoG_bank = []
     L_bank = []
@@ -150,12 +150,47 @@ def gabor_kernel(size, sigma, theta, Lambda, psi, gamma):
     ) * np.cos(2 * np.pi / Lambda * x_theta + psi)
     return gb
 
+def generate_half_discs(sizes, orientations, display=False):
+    discs = []
+    for size in sizes:
+        discs += half_disc(size, orientations)
 
-generate_oriented_DoG_filters(15, 2, 16, 1, False)
-generate_LMS_and_LML_filters(49, False)
-generate_gabor_filters(49, [5,10,15,20], [5,10,15,20], [0.75, 1,1.25, 1.25], 8, False)
+    if display:
+        fig, axes = plt.subplots(nrows=2*len(sizes), ncols=orientations)
+        fig.suptitle(f"Half Disc Filter Bank")
+        for ax, filter in zip(axes.flatten(), discs):
+            resized_filter = cv2.resize(filter, (200,200))
+            ax.imshow(resized_filter, cmap='gray')
+            ax.axis('off')
+        fig.savefig(img_folder+'/HDMasks.png')
+        plt.tight_layout()
+        plt.show()
+    return discs
 
-normalized = np.zeros((49,49))
+
+def half_disc(size, orientations):
+    discs = []
+    img = np.zeros((size,size))
+    cv2.circle(img, (size//2, size//2), size//2, 1, -1)
+    img[:, size//2:] = 0
+
+    thetas = np.linspace(0,np.pi, orientations, False)
+    for theta in thetas:
+        r = cv2.getRotationMatrix2D((size//2,size//2), np.rad2deg(theta), 1.0)
+        mask1 = cv2.warpAffine(img, r, img.shape)
+        mask2 = np.flip(np.flip(mask1,0),1)
+        discs.append(mask1)
+        discs.append(mask2)
+    return discs
+
+
+
+# generate_oriented_DoG_filters(15, 2, 16, 1, False)
+# generate_LM_filters(49, False)
+# generate_gabor_filters(49, [5,10,15,20], [5,10,15,20], [0.75, 1,1.25, 1.25], 8, True)
+# generate_half_discs([9, 25, 49], 8, True)
+
+# normalized = np.zeros((49,49))
 # g = gabor(49,SIGMA, np.pi/4, 0.25, 25, 1)
 # cv2.imshow('gabor1', cv2.resize(cv2.normalize(g, normalized, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U), (500,500)))
 # g2 = gabor_kernel(49,5, np.pi/4, 10, 0.1, 1)
