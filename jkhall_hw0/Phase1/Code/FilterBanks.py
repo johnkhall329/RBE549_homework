@@ -8,25 +8,23 @@ SIGMA = math.sqrt(2)
 
 sobelx = np.array([[-1, 0 , 1],
                     [-2, 0, 2],
-                    [-1, 0, 1]])
+                    [-1, 0, 1]], dtype=np.float32)
 
 sobely = np.array([[1, 2 , 1],
                     [0, 0, 0],
-                    [-1, -2, -1]])
-
+                    [-1, -2, -1]], dtype=np.float32)
 img_folder = os.path.abspath(os.path.join(os.path.abspath(__file__), '../../Images'))
 
 np.set_printoptions(precision=2)
 
-def generate_oriented_DoG_filters(size, sigmas, orientations, sigma=SIGMA, display=False):
+def generate_oriented_DoG_filters(size, sigmas, orientations, display=False):
     bank = []
 
     for sigma in sigmas:
         g = cv2.getGaussianKernel(size, sigma)
         g = g @ g.T
-        g /= np.linalg.norm(g)
-        DoGx = cv2.filter2D(g, -1, sobelx)
-        DoGy = cv2.filter2D(g, -1, sobely)
+        DoGx = cv2.filter2D(g.astype(np.float32), cv2.CV_32F, sobelx)
+        DoGy = cv2.filter2D(g.astype(np.float32), cv2.CV_32F, sobely)
         thetas = np.linspace(0,2*np.pi, orientations, False)
         for theta in thetas:
             DoG = math.cos(theta)*DoGx + math.sin(theta)*DoGy
@@ -82,19 +80,21 @@ def LM(size, scale=1, display=False):
         for theta in thetas:
             r = cv2.getRotationMatrix2D((size//2,size//2), np.rad2deg(theta), 1.0)
             g_new = cv2.warpAffine(G, r, G.shape)
-            DoG1x = cv2.filter2D(g_new, -1, sobelx)
-            DoG1y = cv2.filter2D(g_new, -1, sobely)
-            DoG2xx = cv2.filter2D(DoG1x, -1, sobelx)
-            DoG2yy = cv2.filter2D(DoG1y, -1, sobely)
-            DoG2xy = cv2.filter2D(DoG1x, -1, sobely)
+            DoG1x = cv2.filter2D(g_new.astype(np.float32), cv2.CV_32F, sobelx)
+            DoG1y = cv2.filter2D(g_new.astype(np.float32), cv2.CV_32F, sobely)
+            DoG2xx = cv2.filter2D(DoG1x, cv2.CV_32F, sobelx)
+            DoG2yy = cv2.filter2D(DoG1y, cv2.CV_32F, sobely)
+            DoG2xy = cv2.filter2D(DoG1x, cv2.CV_32F, sobely)
             DoG1 = math.cos(theta)*DoG1x + math.sin(theta)*DoG1y
             DoG2 = math.cos(theta)**2*DoG2xx + 2*math.cos(theta)*math.sin(theta)*DoG2xy + math.sin(theta)**2*DoG2yy
             LM_bank.append(DoG1)
             LM_bank.append(DoG2)
 
             if display: 
-                DoG1_bank.append(cv2.normalize(DoG1, normalized, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U))
-                DoG2_bank.append(cv2.normalize(DoG2, normalized, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U))
+                # DoG1_bank.append(cv2.normalize(DoG1, normalized, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U))
+                # DoG2_bank.append(cv2.normalize(DoG2, normalized, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U))
+                DoG1_bank.append(DoG1)
+                DoG2_bank.append(DoG2)
         DoG_bank += DoG1_bank + DoG2_bank
 
     for sigma in np.hstack((sigmas,3*sigmas)):
@@ -108,7 +108,6 @@ def LM(size, scale=1, display=False):
     for sigma in sigmas:
         g = cv2.getGaussianKernel(size, sigma)
         G = g @ g.T
-        G /= np.linalg.norm(G)
         LM_bank.append(G)
         if display: G_bank.append(G)
     
@@ -159,7 +158,7 @@ def generate_half_discs(sizes, orientations, display=False):
         fig, axes = plt.subplots(nrows=2*len(sizes), ncols=orientations)
         fig.suptitle(f"Half Disc Filter Bank")
         for ax, filter in zip(axes.flatten(), discs):
-            resized_filter = cv2.resize(filter, (200,200))
+            resized_filter = cv2.resize(filter, (200,200), interpolation=cv2.INTER_NEAREST)
             ax.imshow(resized_filter, cmap='gray')
             ax.axis('off')
         fig.savefig(img_folder+'/HDMasks.png')

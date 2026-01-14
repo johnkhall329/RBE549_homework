@@ -33,7 +33,7 @@ def main():
     Display all the filters in this filter bank and save image as DoG.png,
     use command "cv2.imwrite(...)"
     """
-    DoG_bank = generate_oriented_DoG_filters(49, [np.sqrt(2), 2], 16, 1, display=False)
+    DoG_bank = generate_oriented_DoG_filters(15, [np.sqrt(2), 2], 16, display=False)
 
     """
     Generate Leung-Malik Filter Bank: (LM)
@@ -48,7 +48,7 @@ def main():
     Display all the filters in this filter bank and save image as Gabor.png,
     use command "cv2.imwrite(...)"
     """
-    Gabor_bank = generate_gabor_filters(49, [5,10,20], [5,10,20], [0.75, 1, 1.25], 8, display=False)
+    Gabor_bank = generate_gabor_filters(15, [1.75,4], [2,4], [0.9, 1.1], 8, display=False)
 
 
     """
@@ -56,7 +56,7 @@ def main():
     Display all the Half-disk masks and save image as HDMasks.png,
     use command "cv2.imwrite(...)"
     """
-    half_discs = generate_half_discs([25,49,99],8, display=False)
+    half_discs = generate_half_discs([9,15,25],8, display=False)
 
 
     """
@@ -74,7 +74,7 @@ def main():
     canny_dir = os.path.join(BSDS500_dir, 'CannyBaseline')
     images = glob.glob(img_dir+'/*.jpg')
     filter_bank = DoG_bank+LM_bank+Gabor_bank
-    t_clusters = 56
+    t_clusters = 64
     b_c_clusters = 16
     for img_path in images:
         img = cv2.imread(img_path, cv2.IMREAD_COLOR)
@@ -139,7 +139,7 @@ def main():
         Display PbLite and save image as PbLite_ImageName.png
         use command "cv2.imwrite(...)"
         """
-        pb_lite = compute_pb_lite(Tg, Bg, Cg, sobel_baseline, canny_baseline, 0.65, 0.35, image_name, display=True)
+        pb_lite = compute_pb_lite(Tg, Bg, Cg, sobel_baseline, canny_baseline, 0.5, 0.5, 5, image_name, display=True)
     
 if __name__ == '__main__':
     main()
