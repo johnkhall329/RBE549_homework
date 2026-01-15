@@ -42,11 +42,13 @@ def SetupAll(BasePath, CheckPointPath):
     DirNamesTrain =  SetupDirNames(BasePath)
 
     # Read and Setup Labels
-    LabelsPathTrain = './TxtFiles/LabelsTrain.txt'
-    TrainLabels = ReadLabels(LabelsPathTrain)
+    LabelsPath = os.path.abspath(os.path.join(BasePath, 'TxtFiles'))
+    TrainLabels = ReadLabels(LabelsPath+'/LabelsTrain.txt')
+    TestLabels = ReadLabels(LabelsPath+'/LabelsTest.txt')
 
     # If CheckPointPath doesn't exist make the path
     if(not (os.path.isdir(CheckPointPath))):
+       print(CheckPointPath)
        os.makedirs(CheckPointPath)
         
     # Save checkpoint every SaveCheckPoint iteration in every epoch, checkpoint saved automatically after every epoch
@@ -61,7 +63,7 @@ def SetupAll(BasePath, CheckPointPath):
     # Number of classes
     NumClasses = 10
 
-    return DirNamesTrain, SaveCheckPoint, ImageSize, NumTrainSamples, TrainLabels, NumClasses
+    return DirNamesTrain, SaveCheckPoint, ImageSize, NumTrainSamples, TrainLabels, TestLabels, NumClasses
 
 def ReadLabels(LabelsPathTrain):
     if(not (os.path.isfile(LabelsPathTrain))):
@@ -82,7 +84,8 @@ def SetupDirNames(BasePath):
     Outputs:
     Writes a file ./TxtFiles/DirNames.txt with full path to all image files without extension
     """
-    DirNamesTrain = ReadDirNames('./TxtFiles/DirNamesTrain.txt')        
+    DirNamesPath = os.path.abspath(os.path.join(BasePath, 'TxtFiles/DirNamesTrain.txt'))
+    DirNamesTrain = ReadDirNames(DirNamesPath)        
     
     return DirNamesTrain
 

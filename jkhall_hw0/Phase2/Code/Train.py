@@ -44,10 +44,10 @@ from torchvision.transforms import ToTensor
 import argparse
 import shutil
 import string
-from termcolor import colored, cprint
+# from termcolor import colored, cprint
 import math as m
 from tqdm.notebook import tqdm
-import Misc.ImageUtils as iu
+# import Misc.ImageUtils as iu
 from Network.Network import CIFAR10Model
 from Misc.MiscUtils import *
 from Misc.DataUtils import *
@@ -110,7 +110,7 @@ def PrettyPrint(NumEpochs, DivTrain, MiniBatchSize, NumTrainSamples, LatestFile)
 
 def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
                    NumEpochs, MiniBatchSize, SaveCheckPoint, CheckPointPath,
-                   DivTrain, LatestFile, TrainSet, LogsPath):
+                   DivTrain, LatestFile, TrainSet, TestSet, TestLabels, LogsPath):
     """
     Inputs: 
     TrainLabels - Labels corresponding to Train/Test
@@ -123,6 +123,8 @@ def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
     DivTrain - Divide the data by this number for Epoch calculation, use if you have a lot of dataor for debugging code
     LatestFile - Latest checkpointfile to continue training
     TrainSet - The training dataset
+    TestSet - The test dataset
+    TestLabels - Labels corresponding to Test
     LogsPath - Path to save Tensorboard Logs
     Outputs:
     Saves Trained network in CheckPointPath and Logs to LogsPath
@@ -132,14 +134,14 @@ def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
     ###############################################
     # Fill your optimizer of choice here!
     ###############################################
-    Optimizer = ...
+    Optimizer = AdamW(model.parameters(), lr=1e-3)
 
     # Tensorboard
     # Create a summary to monitor loss tensor
     Writer = SummaryWriter(LogsPath)
 
     if LatestFile is not None:
-        CheckPoint = torch.load(CheckPointPath + LatestFile + '.ckpt')
+        CheckPoint = torch.load(CheckPointPath +'/' + LatestFile + '.ckpt')
         # Extract only numbers from the name
         StartEpoch = int(''.join(c for c in LatestFile.split('a')[0] if c.isdigit()))
         model.load_state_dict(CheckPoint['model_state_dict'])
@@ -150,6 +152,7 @@ def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
         
     for Epochs in tqdm(range(StartEpoch, NumEpochs)):
         NumIterationsPerEpoch = int(NumTrainSamples/MiniBatchSize/DivTrain)
+        batch_results = []
         for PerEpochCounter in tqdm(range(NumIterationsPerEpoch)):
             Batch = GenerateBatch(TrainSet, TrainLabels, ImageSize, MiniBatchSize)
             
@@ -160,24 +163,33 @@ def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
             LossThisBatch.backward()
             Optimizer.step()
             
+            result = model.validation_step(Batch)
+            batch_results.append(result)
+
             # Save checkpoint every some SaveCheckPoint's iterations
             if PerEpochCounter % SaveCheckPoint == 0:
                 # Save the Model learnt in this epoch
-                SaveName =  CheckPointPath + str(Epochs) + 'a' + str(PerEpochCounter) + 'model.ckpt'
-                
+                SaveName =  CheckPointPath + '/' + str(Epochs) + 'a' + str(PerEpochCounter) + 'model.ckpt'
+                model.batch_end(Epochs*NumIterationsPerEpoch + PerEpochCounter, result)
                 torch.save({'epoch': Epochs,'model_state_dict': model.state_dict(),'optimizer_state_dict': Optimizer.state_dict(),'loss': LossThisBatch}, SaveName)
-                print('\n' + SaveName + ' Model Saved...')
-
-            result = model.validation_step(Batch)
-            model.epoch_end(Epochs*NumIterationsPerEpoch + PerEpochCounter, result)
-            # Tensorboard
-            Writer.add_scalar('LossEveryIter', result["loss"], Epochs*NumIterationsPerEpoch + PerEpochCounter)
-            Writer.add_scalar('Accuracy', result["acc"], Epochs*NumIterationsPerEpoch + PerEpochCounter)
-            # If you don't flush the tensorboard doesn't update until a lot of iterations!
-            Writer.flush()
+                # print('\n' + SaveName + ' Model Saved...')
 
         # Save model every epoch
-        SaveName = CheckPointPath + str(Epochs) + 'model.ckpt'
+        SaveName = CheckPointPath + '/' + str(Epochs) + 'model.ckpt'
+        epoch_results = model.validation_epoch_end(batch_results)
+
+        test_set = torch.from_numpy(TestSet.data).to(torch.float32)
+        test_set = test_set.permute(0,3,1,2)
+        test_labels = torch.tensor(TestSet.targets)
+        epoch_test_results = model.test_epoch_end(test_set, test_labels)
+
+        # Tensorboard
+        Writer.add_scalar('LossEveryEpoch', epoch_results["loss"], Epochs)
+        Writer.add_scalar('TrainAccuracy', epoch_results["acc"], Epochs)
+        Writer.add_scalar('TestAccuracy', epoch_test_results, Epochs)
+        # If you don't flush the tensorboard doesn't update until a lot of iterations!
+        Writer.flush()
+        model.epoch_end(Epochs, epoch_results)
         torch.save({'epoch': Epochs,'model_state_dict': model.state_dict(),'optimizer_state_dict': Optimizer.state_dict(),'loss': LossThisBatch}, SaveName)
         print('\n' + SaveName + ' Model Saved...')
         
@@ -194,10 +206,12 @@ def main():
     Parser.add_argument('--CheckPointPath', default='../Checkpoints/', help='Path to save Checkpoints, Default: ../Checkpoints/')
     Parser.add_argument('--NumEpochs', type=int, default=50, help='Number of Epochs to Train for, Default:50')
     Parser.add_argument('--DivTrain', type=int, default=1, help='Factor to reduce Train data by per epoch, Default:1')
-    Parser.add_argument('--MiniBatchSize', type=int, default=1, help='Size of the MiniBatch to use, Default:1')
+    Parser.add_argument('--MiniBatchSize', type=int, default=128, help='Size of the MiniBatch to use, Default:1')
     Parser.add_argument('--LoadCheckPoint', type=int, default=0, help='Load Model from latest Checkpoint from CheckPointsPath?, Default:0')
     Parser.add_argument('--LogsPath', default='Logs/', help='Path to save Logs for Tensorboard, Default=Logs/')
     TrainSet = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                        download=True, transform=ToTensor())
+    TestSet = torchvision.datasets.CIFAR10(root='./data', train=False,
                                         download=True, transform=ToTensor())
 
     Args = Parser.parse_args()
@@ -208,9 +222,11 @@ def main():
     CheckPointPath = Args.CheckPointPath
     LogsPath = Args.LogsPath
 
+    BasePath = os.path.abspath(os.path.dirname(__file__))
+    CheckPointPath = os.path.abspath(os.path.join(BasePath, CheckPointPath))
     
     # Setup all needed parameters including file reading
-    SaveCheckPoint, ImageSize, NumTrainSamples, TrainLabels, NumClasses = SetupAll(CheckPointPath)
+    DirNamesTrain, SaveCheckPoint, ImageSize, NumTrainSamples, TrainLabels, TestLabels, NumClasses = SetupAll(BasePath, CheckPointPath)
 
 
     # Find Latest Checkpoint File
@@ -224,7 +240,7 @@ def main():
 
     TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
                 NumEpochs, MiniBatchSize, SaveCheckPoint, CheckPointPath,
-                DivTrain, LatestFile, TrainSet, LogsPath)
+                DivTrain, LatestFile, TrainSet, TestSet, TestLabels,LogsPath)
 
     
 if __name__ == '__main__':

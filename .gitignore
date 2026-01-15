@@ -208,5 +208,7 @@ __marimo__/
 
 BSDS500/
 CIFAR10/
-
+*.ckpt
 .vscode
+Logs/
+data/

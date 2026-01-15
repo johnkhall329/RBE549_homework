@@ -29,11 +29,13 @@ from skimage import data, exposure, img_as_float
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import torchvision
 from torchvision.transforms import ToTensor
 import argparse
 import shutil
 import string
 import math as m
+import sklearn
 from sklearn.metrics import confusion_matrix
 from tqdm.notebook import tqdm
 import torch
@@ -153,8 +155,8 @@ def TestOperation(ImageSize, ModelPath, TestSet, LabelsPathPred):
 
     for count in tqdm(range(len(TestSet))): 
         Img, Label = TestSet[count]
-        Img, ImgOrg = ReadImages(Img)
-        PredT = torch.argmax(model(Img)).item()
+        # Img, ImgOrg = ReadImages(Img)
+        PredT = torch.argmax(model(Img.view([-1, 3, 32, 32]))).item()
 
         OutSaveT.write(str(PredT)+'\n')
     OutSaveT.close()
@@ -170,19 +172,25 @@ def main():
 
     # Parse Command Line arguments
     Parser = argparse.ArgumentParser()
+    Parser.add_argument('--CheckPointPath', default='../Checkpoints/', help='Path to save Checkpoints, Default: ../Checkpoints/')
     Parser.add_argument('--ModelPath', dest='ModelPath', default='/home/aa/144model.ckpt', help='Path to load latest model from, Default:ModelPath')
     Parser.add_argument('--LabelsPath', dest='LabelsPath', default='./TxtFiles/LabelsTest.txt', help='Path of labels file, Default:./TxtFiles/LabelsTest.txt')
     Args = Parser.parse_args()
-    ModelPath = Args.ModelPath
+    CheckPointPath = Args.CheckPointPath
+    ModelPath = "C:\\Users\\johnk\\Documents\\RBE\\RBE549\\RBE549_homework\\jkhall_hw0\\Phase2\\Checkpoints\\4model.ckpt"
     LabelsPath = Args.LabelsPath
-    TestSet = CIFAR10(root='data/', train=False)
+    # TestSet = CIFAR10(root='data/', train=False)
+    TestSet = torchvision.datasets.CIFAR10(root='./data', train=False,
+                                        download=True, transform=ToTensor())
 
-
+    BasePath = os.path.abspath(os.path.dirname(__file__))
+    CheckPointPath = os.path.abspath(os.path.join(BasePath, CheckPointPath))
+    LabelsPath = os.path.abspath(os.path.join(BasePath, LabelsPath))
     # Setup all needed parameters including file reading
-    ImageSize = SetupAll(BasePath)
+    ImageSize = SetupAll()
 
     # Define PlaceHolder variables for Predicted output
-    LabelsPathPred = './TxtFiles/PredOut.txt' # Path to save predicted labels
+    LabelsPathPred = os.path.abspath(os.path.join(BasePath, 'TxtFiles/PredOut.txt')) # Path to save predicted labels
 
     TestOperation(ImageSize, ModelPath, TestSet, LabelsPathPred)
 
