@@ -21,6 +21,7 @@ Code adapted from CMSC733 at the University of Maryland, College Park.
 # termcolor, do (pip install termcolor)
 
 
+from sklearn.metrics import confusion_matrix
 import torch
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
@@ -48,7 +49,7 @@ import string
 import math as m
 from tqdm.notebook import tqdm
 # import Misc.ImageUtils as iu
-from Network.Network import CIFAR10Model
+from Network.Network import InitialCIFAR10Model, UpdatedCIFAR10Model, ResNetCIFAR10Model, ResNeXtCIFAR10Model
 from Misc.MiscUtils import *
 from Misc.DataUtils import *
 
@@ -57,7 +58,17 @@ from Misc.DataUtils import *
 # Don't generate pyc codes
 sys.dont_write_bytecode = True
 
+def StandardizeInputs(data):
+    x_min = data.min()
+    x_max = data.max()
+    # Handle the case where all values are the same to avoid division by zero
+    if x_min == x_max:
+        data = torch.zeros_like(data)
+    else:
+        data = 2 * (data - x_min) / (x_max - x_min) - 1
     
+    return data
+
 def GenerateBatch(TrainSet, TrainLabels, ImageSize, MiniBatchSize):
     """
     Inputs: 
@@ -81,15 +92,12 @@ def GenerateBatch(TrainSet, TrainLabels, ImageSize, MiniBatchSize):
         RandIdx = random.randint(0, len(TrainSet)-1)
         
         ImageNum += 1
-        
-          ##########################################################
-          # Add any standardization or data augmentation here!
-          ##########################################################
 
         I1, Label = TrainSet[RandIdx]
 
         # Append All Images and Mask
-        I1Batch.append(I1)
+        I1Batch.append(StandardizeInputs(I1))
+        # I1Batch.append(I1)
         LabelBatch.append(torch.tensor(Label))
         
     return torch.stack(I1Batch), torch.stack(LabelBatch)
@@ -130,7 +138,8 @@ def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
     Saves Trained network in CheckPointPath and Logs to LogsPath
     """
     # Initialize the model
-    model = CIFAR10Model(InputSize=3*32*32,OutputSize=10) 
+    model = ResNetCIFAR10Model(InputSize=3*32*32,OutputSize=10) 
+
     ###############################################
     # Fill your optimizer of choice here!
     ###############################################
@@ -149,10 +158,21 @@ def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
     else:
         StartEpoch = 0
         print('New model initialized....')
+    
+    test_set = torch.from_numpy(TestSet.data).to(torch.float32)
+    test_set = test_set.permute(0,3,1,2)
+    test_set = StandardizeInputs(test_set)
+    test_labels = torch.tensor(TestSet.targets)
         
     for Epochs in tqdm(range(StartEpoch, NumEpochs)):
         NumIterationsPerEpoch = int(NumTrainSamples/MiniBatchSize/DivTrain)
         batch_results = []
+        epoch_preds = []
+        epoch_labels = []
+        if Epochs % 10 == 0 and Epochs != 0: # Decrease learning rate
+            for g in Optimizer.param_groups:
+                print(f'Learning rate decreased from {g["lr"]:.5f} to {(g["lr"] * 0.9):.5f}')
+                g['lr'] = g['lr'] * 0.9
         for PerEpochCounter in tqdm(range(NumIterationsPerEpoch)):
             Batch = GenerateBatch(TrainSet, TrainLabels, ImageSize, MiniBatchSize)
             
@@ -165,6 +185,8 @@ def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
             
             result = model.validation_step(Batch)
             batch_results.append(result)
+            epoch_preds += result['pred'].tolist()
+            epoch_labels += result['labels'].tolist()
 
             # Save checkpoint every some SaveCheckPoint's iterations
             if PerEpochCounter % SaveCheckPoint == 0:
@@ -178,20 +200,45 @@ def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
         SaveName = CheckPointPath + '/' + str(Epochs) + 'model.ckpt'
         epoch_results = model.validation_epoch_end(batch_results)
 
-        test_set = torch.from_numpy(TestSet.data).to(torch.float32)
-        test_set = test_set.permute(0,3,1,2)
-        test_labels = torch.tensor(TestSet.targets)
-        epoch_test_results = model.test_epoch_end(test_set, test_labels)
+        with torch.no_grad():
+            epoch_test_results = model.test_epoch_end(test_set, test_labels)
 
         # Tensorboard
         Writer.add_scalar('LossEveryEpoch', epoch_results["loss"], Epochs)
         Writer.add_scalar('TrainAccuracy', epoch_results["acc"], Epochs)
-        Writer.add_scalar('TestAccuracy', epoch_test_results, Epochs)
+        Writer.add_scalar('TestAccuracy', epoch_test_results[0], Epochs)
         # If you don't flush the tensorboard doesn't update until a lot of iterations!
         Writer.flush()
         model.epoch_end(Epochs, epoch_results)
         torch.save({'epoch': Epochs,'model_state_dict': model.state_dict(),'optimizer_state_dict': Optimizer.state_dict(),'loss': LossThisBatch}, SaveName)
         print('\n' + SaveName + ' Model Saved...')
+
+    model.eval()
+    with torch.no_grad():
+        epoch_test_results = model.test_epoch_end(test_set, test_labels)
+
+    train_cm = confusion_matrix(y_true=epoch_labels,  # True class for test-set.
+                                y_pred=epoch_preds,
+                                normalize='pred')  # Predicted class.
+    
+    PlotConfusionMatrix(train_cm, TrainSet.classes, "ResNeXt Training", normalize=True)
+
+    test_cm = confusion_matrix(y_true=TestSet.targets,  # True class for test-set.
+                               y_pred=epoch_test_results[1],
+                               normalize='pred')  # Predicted class.
+    
+    PlotConfusionMatrix(test_cm, TrainSet.classes, "ResNeXt Test", normalize=True)
+
+    num_params = 0
+    for name, param in model.named_parameters():
+        if param.requires_grad: num_params += param.numel()
+    print('Number of parameters in this model are %d ' % num_params)
+
+    Writer.add_graph(model, torch.randn(1, 3, 32, 32))
+    Writer.flush()
+    Writer.close()
+
+    torch.save(model.state_dict(), CheckPointPath + '/' + 'FinalModel.pt')
         
 
 def main():
@@ -204,11 +251,11 @@ def main():
     # Parse Command Line arguments
     Parser = argparse.ArgumentParser()
     Parser.add_argument('--CheckPointPath', default='../Checkpoints/', help='Path to save Checkpoints, Default: ../Checkpoints/')
-    Parser.add_argument('--NumEpochs', type=int, default=50, help='Number of Epochs to Train for, Default:50')
+    Parser.add_argument('--NumEpochs', type=int, default=1, help='Number of Epochs to Train for, Default:50')
     Parser.add_argument('--DivTrain', type=int, default=1, help='Factor to reduce Train data by per epoch, Default:1')
     Parser.add_argument('--MiniBatchSize', type=int, default=128, help='Size of the MiniBatch to use, Default:1')
     Parser.add_argument('--LoadCheckPoint', type=int, default=0, help='Load Model from latest Checkpoint from CheckPointsPath?, Default:0')
-    Parser.add_argument('--LogsPath', default='Logs/', help='Path to save Logs for Tensorboard, Default=Logs/')
+    Parser.add_argument('--LogsPath', default='Logs/ResNeXt', help='Path to save Logs for Tensorboard, Default=Logs/')
     TrainSet = torchvision.datasets.CIFAR10(root='./data', train=True,
                                         download=True, transform=ToTensor())
     TestSet = torchvision.datasets.CIFAR10(root='./data', train=False,

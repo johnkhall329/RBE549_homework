@@ -20,6 +20,7 @@ Code adapted from CMSC733 at the University of Maryland, College Park.
 # opencv, do (pip install opencv-python)
 # skimage, do (apt install python-skimage)
 
+import itertools
 import cv2
 import os
 import sys
@@ -112,7 +113,7 @@ def ReadLabels(LabelsPathTest, LabelsPathPred):
         
     return LabelTest, LabelPred
 
-def ConfusionMatrix(LabelsTrue, LabelsPred):
+def ConfusionMatrix(LabelsTrue, LabelsPred, classes):
     """
     LabelsTrue - True labels
     LabelsPred - Predicted labels
@@ -121,7 +122,10 @@ def ConfusionMatrix(LabelsTrue, LabelsPred):
     # Get the confusion matrix using sklearn.
     LabelsTrue, LabelsPred = list(LabelsTrue), list(LabelsPred)
     cm = confusion_matrix(y_true=LabelsTrue,  # True class for test-set.
-                          y_pred=LabelsPred)  # Predicted class.
+                          y_pred=LabelsPred,
+                          normalize='all')  # Predicted class.
+    
+    PlotConfusionMatrix(cm, classes, normalize=True)
 
     # Print the confusion matrix as text.
     for i in range(10):
@@ -196,7 +200,7 @@ def main():
 
     # Plot Confusion Matrix
     LabelsTrue, LabelsPred = ReadLabels(LabelsPath, LabelsPathPred)
-    ConfusionMatrix(LabelsTrue, LabelsPred)
+    ConfusionMatrix(LabelsTrue, LabelsPred, TestSet.classes)
      
 if __name__ == '__main__':
     main()
