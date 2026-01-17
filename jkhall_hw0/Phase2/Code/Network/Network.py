@@ -268,7 +268,117 @@ class ResNeXtBlock(nn.Module):
         x += residual
         x = F.relu(x)
         return x
+    
+class DenseNetCIFAR10Model(ImageClassificationBase):
+    def __init__(self, InputSize, OutputSize, compression=0.5, growth_rate=8):
+        """
+        Inputs: 
+        InputSize - Size of the Input
+        OutputSize - Size of the Output
+        """
+        super().__init__()
+        
+        in_channels = 32
+        layer_count = 3
+        self.conv1 = nn.Conv2d(3, in_channels, 5, padding=2, bias=False)
+        self.batch1 = nn.BatchNorm2d(in_channels)
+        self.maxpool = nn.MaxPool2d((2,2))
 
+        self.block1 = DenseBlock(in_channels=in_channels, layer_count=layer_count, growth_rate=growth_rate)
+        self.trans1 = TransitionLayer(in_channels=in_channels + layer_count*growth_rate, compression=compression)
+
+        self.block2 = DenseBlock(in_channels=int((in_channels + layer_count*growth_rate)*compression), layer_count=layer_count, growth_rate=growth_rate)
+        self.trans2 = TransitionLayer(in_channels=int((in_channels + layer_count*growth_rate)*compression) + layer_count*growth_rate, compression=compression)
+
+        self.block3 = DenseBlock(in_channels=int((int((in_channels + layer_count*growth_rate)*compression) + layer_count*growth_rate)*compression), layer_count=layer_count, growth_rate=growth_rate)
+
+        self.batch2 = nn.BatchNorm2d(int((int((in_channels + layer_count*growth_rate)*compression) + layer_count*growth_rate)*compression) + layer_count*growth_rate)
+        self.avgpool = nn.AvgPool2d(2)
+
+        self._to_linear = None
+        x_rand = torch.randn(3,32,32).view(-1,3,32,32)
+        self.convs(x_rand)
+
+        self.fc1 = nn.Linear(self._to_linear, 96)
+        self.fc2 = nn.Linear(96, OutputSize)
+
+    def convs(self, x):
+        x = self.conv1(x)
+        x = self.maxpool(F.relu(self.batch1(x)))
+
+        x = self.block1(x)
+        x = self.trans1(x)
+
+        x = self.block2(x)
+        x = self.trans2(x)
+        x = self.block3(x)
+        x = self.avgpool(F.relu(x))
+
+        if self._to_linear is None:
+            self._to_linear = x[0].shape[0]*x[0].shape[1]*x[0].shape[2]
+        return x
+    
+    def forward(self, xb):
+        """
+        Input:
+        xb is a MiniBatch of the current image
+        Outputs:
+        out - output of the network
+        """
+        x = self.convs(xb)
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
+    
+class DenseLayer(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+
+        inter_channels = in_channels * 4 # Bottleneck
+        self.res1 = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
+
+        self.conv1 = nn.Conv2d(in_channels, inter_channels, kernel_size=1, bias=False)
+        self.conv2 = nn.Conv2d(inter_channels, out_channels, kernel_size=3, padding=1, bias=False)
+
+        self.batch1 = nn.BatchNorm2d(in_channels)
+        self.batch2 = nn.BatchNorm2d(inter_channels)
+
+    def forward(self, x):
+        input = x
+        x = F.relu(self.batch1(x))
+        x = self.conv1(x)
+        x = F.relu(self.batch2(x))
+        x = self.conv2(x)
+        x = torch.cat([x, input], 1)
+        return x
+
+class DenseBlock(nn.Module):
+    def __init__(self, in_channels, layer_count, growth_rate):
+        super().__init__()
+
+        self.layers = nn.ModuleList()
+        for i in range(layer_count):
+            self.layers.append(DenseLayer(in_channels + i*growth_rate, growth_rate))
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x)
+        return x
+    
+class TransitionLayer(nn.Module):
+    def __init__(self, in_channels, compression):
+        super().__init__()
+
+        self.batch = nn.BatchNorm2d(in_channels)
+        self.conv = nn.Conv2d(in_channels, int(in_channels * compression), kernel_size=1, bias=False)
+        self.avgpool = nn.AvgPool2d(2, 2)
+
+    def forward(self, x):
+        x = F.relu(self.batch(x))
+        x = self.conv(x)
+        x = self.avgpool(x)
+        return x
 
 class InitialCIFAR10Model(ImageClassificationBase):
     def __init__(self, InputSize, OutputSize):

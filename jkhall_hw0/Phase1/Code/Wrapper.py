@@ -80,7 +80,7 @@ def main():
         img = cv2.imread(img_path, cv2.IMREAD_COLOR)
         image_name = img_path.split('/')[-1] if sys.platform.startswith('linux') else img_path.split('\\')[-1]
         image_name = image_name.removesuffix('.jpg')
-        t_map = texton_map(img, image_name, filter_bank, t_clusters, display=True)
+        t_map = texton_map(img, image_name, filter_bank, t_clusters, display=False)
         
 
         """
@@ -96,7 +96,7 @@ def main():
         Generate Brightness Map
         Perform brightness binning 
         """
-        b_map = brightness_map(img, b_c_clusters)
+        b_map = brightness_map(img, image_name, b_c_clusters, display=False)
 
         """
         Generate Brightness Gradient (Bg)
@@ -111,7 +111,7 @@ def main():
         Generate Color Map
         Perform color binning or clustering
         """
-        c_map = color_map(img, b_c_clusters)
+        c_map = color_map(img, image_name, b_c_clusters, display=False)
 
         """
         Generate Color Gradient (Cg)
@@ -139,7 +139,7 @@ def main():
         Display PbLite and save image as PbLite_ImageName.png
         use command "cv2.imwrite(...)"
         """
-        pb_lite = compute_pb_lite(Tg, Bg, Cg, sobel_baseline, canny_baseline, 0.5, 0.5, 5, image_name, display=True)
+        pb_lite = compute_pb_lite(Tg, Bg, Cg, sobel_baseline, canny_baseline, 0.5, 0.5, image_name, display=True)
     
 if __name__ == '__main__':
     main()

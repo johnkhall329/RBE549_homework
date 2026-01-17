@@ -27,27 +27,56 @@ def texton_map(img, image_name, filter_bank, n_clusters=64, display=False):
     print("completed texton k-means")
     texton_map = texton_map.reshape(gray_img.shape)
     if display:
-        im = plt.imshow(texton_map,cmap='jet')
-        plt.colorbar(im, label="Cluster")
-        plt.title(f"Texton Map of Image {image_name}")
-        plt.axis('off')
-        plt.savefig(img_folder+"/TextonMap_"+image_name)
-        plt.show()
+        im = texton_map/np.max(texton_map)*255
+        im = cv2.applyColorMap(im.astype(np.uint8), cv2.COLORMAP_JET)
+        cv2.imshow('Texton Map', im)
+        cv2.waitKey(1)
+        cv2.imwrite(img_folder+"/TextonMap_"+image_name+".png", im)
+        # im = plt.imshow(texton_map,cmap='jet')
+        # plt.colorbar(im, label="Cluster")
+        # plt.title(f"Texton Map of Image {image_name}")
+        # plt.axis('off')
+        # plt.savefig(img_folder+"/TextonMap_"+image_name)
+        # plt.show()
 
     return texton_map
 
-def brightness_map(img, n_clusters=16):
+def brightness_map(img, image_name, n_clusters=16, display=False):
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, brightness_map, _ = k_means(gray_img.reshape(-1,1),n_clusters)
 
     brightness_map = brightness_map.reshape(gray_img.shape)
+    if display:
+        im = brightness_map/np.max(brightness_map)*255
+        im = cv2.applyColorMap(im.astype(np.uint8), cv2.COLORMAP_JET)
+        cv2.imshow('Brightness Map', im)
+        cv2.waitKey(1)
+        cv2.imwrite(img_folder+"/BrightnessMap_"+image_name+".png", im)
+        # im = plt.imshow(brightness_map,cmap='jet')
+        # plt.colorbar(im, label="Cluster")
+        # plt.title(f"Brightness Map of Image {image_name}")
+        # plt.axis('off')
+        # plt.savefig(img_folder+"/BrightnessMap_"+image_name)
+        # plt.show()
     return brightness_map
 
-def color_map(img, n_clusters=16):
+def color_map(img, image_name, n_clusters=16, display=False):
     hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     _, color_map, _ = k_means(hsv_img.reshape((img.shape[0]*img.shape[1], 3)),n_clusters)
 
     color_map = color_map.reshape(img.shape[:2])
+    if display:
+        im = color_map/np.max(color_map)*255
+        im = cv2.applyColorMap(im.astype(np.uint8), cv2.COLORMAP_JET)
+        cv2.imshow('Color Map', im)
+        cv2.waitKey(1)
+        cv2.imwrite(img_folder+"/ColorMap_"+image_name+".png", im)
+        # im = plt.imshow(color_map,cmap='jet')
+        # plt.colorbar(im, label="Cluster")
+        # plt.title(f"Color Map of Image {image_name}")
+        # plt.axis('off')
+        # plt.savefig(img_folder+"/ColorMap_"+image_name)
+        # plt.show()
     return color_map
 
 def compute_gradient(map, n_clusters, image_name, masks, gradient_name, display=False):
@@ -68,16 +97,22 @@ def compute_gradient(map, n_clusters, image_name, masks, gradient_name, display=
     gradient = np.mean(full_gradient, axis=2)
 
     if display:
-        im = plt.imshow(gradient,cmap='gray')
-        plt.colorbar(im, label="Mean Gradient Magnitude")
-        plt.title(f"{gradient_name} of Image {image_name}")
-        plt.axis('off')
-        plt.savefig(img_folder+"/"+gradient_name+"_"+image_name+".png")
-        plt.show()
+        im = gradient/np.max(gradient)*255
+        im = cv2.applyColorMap(im.astype(np.uint8), cv2.COLORMAP_BONE)
+        cv2.imshow(gradient_name, im)
+        cv2.waitKey(1)
+        cv2.imwrite(img_folder+"/"+gradient_name+"_"+image_name+".png", im)
+
+        # im = plt.imshow(gradient,cmap='gray')
+        # plt.colorbar(im, label="Mean Gradient Magnitude")
+        # plt.title(f"{gradient_name} of Image {image_name}")
+        # plt.axis('off')
+        # plt.savefig(img_folder+"/"+gradient_name+"_"+image_name+".png")
+        # plt.show()
 
     return gradient
 
-def compute_pb_lite(Tg, Bg, Cg, sobel, canny, w_sobel, w_canny, threshold, img_name, display=False):
+def compute_pb_lite(Tg, Bg, Cg, sobel, canny, w_sobel, w_canny, img_name, display=False):
     feature_weight = (Tg+Bg+Cg)/3
     feature_weight /= np.max(feature_weight)
     
@@ -87,12 +122,18 @@ def compute_pb_lite(Tg, Bg, Cg, sobel, canny, w_sobel, w_canny, threshold, img_n
     # pb_lite = w_sobel*sobel + w_canny*canny
     # pb_lite = cv2.inRange(cv2.normalize(pb_lite, blank, 0, 255, cv2.NORM_MINMAX).astype(np.uint8), threshold, 255)
     if display:
-        cv2.imshow('feature weight', feature_weight)
+        # cv2.imshow('feature weight', feature_weight)
+        # cv2.waitKey(1)
+        im = pb_lite/np.max(pb_lite)*255
+        im = cv2.applyColorMap(im.astype(np.uint8), cv2.COLORMAP_BONE)
+        cv2.imshow('PB-Lite', im)
         cv2.waitKey(1)
-        im = plt.imshow(pb_lite,cmap='gray')
-        # plt.colorbar(im, label="Mean Gradient Magnitude")
-        plt.axis('off')
-        plt.title(f"Pb-lite of Image {img_name}")
-        plt.savefig(img_folder+"/PbLite_"+img_name+".png")
-        plt.show()
+        cv2.imwrite(img_folder+"/PbLite_"+img_name+".png", im)
+        
+        # im = plt.imshow(pb_lite,cmap='gray')
+        # # plt.colorbar(im, label="Mean Gradient Magnitude")
+        # plt.axis('off')
+        # plt.title(f"Pb-lite of Image {img_name}")
+        # plt.savefig(img_folder+"/PbLite_"+img_name+".png")
+        # plt.show()
     return pb_lite

@@ -49,7 +49,7 @@ import string
 import math as m
 from tqdm.notebook import tqdm
 # import Misc.ImageUtils as iu
-from Network.Network import InitialCIFAR10Model, UpdatedCIFAR10Model, ResNetCIFAR10Model, ResNeXtCIFAR10Model
+from Network.Network import InitialCIFAR10Model, UpdatedCIFAR10Model, ResNetCIFAR10Model, ResNeXtCIFAR10Model, DenseNetCIFAR10Model
 from Misc.MiscUtils import *
 from Misc.DataUtils import *
 
@@ -138,7 +138,7 @@ def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
     Saves Trained network in CheckPointPath and Logs to LogsPath
     """
     # Initialize the model
-    model = ResNetCIFAR10Model(InputSize=3*32*32,OutputSize=10) 
+    model = DenseNetCIFAR10Model(InputSize=3*32*32,OutputSize=10) 
 
     ###############################################
     # Fill your optimizer of choice here!
@@ -211,6 +211,7 @@ def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
         Writer.flush()
         model.epoch_end(Epochs, epoch_results)
         torch.save({'epoch': Epochs,'model_state_dict': model.state_dict(),'optimizer_state_dict': Optimizer.state_dict(),'loss': LossThisBatch}, SaveName)
+        
         print('\n' + SaveName + ' Model Saved...')
 
     model.eval()
@@ -221,19 +222,20 @@ def TrainOperation(TrainLabels, NumTrainSamples, ImageSize,
                                 y_pred=epoch_preds,
                                 normalize='pred')  # Predicted class.
     
-    PlotConfusionMatrix(train_cm, TrainSet.classes, "ResNeXt Training", normalize=True)
+    PlotConfusionMatrix(train_cm, TrainSet.classes, "DenseNet Training", normalize=True)
 
     test_cm = confusion_matrix(y_true=TestSet.targets,  # True class for test-set.
                                y_pred=epoch_test_results[1],
                                normalize='pred')  # Predicted class.
     
-    PlotConfusionMatrix(test_cm, TrainSet.classes, "ResNeXt Test", normalize=True)
+    PlotConfusionMatrix(test_cm, TrainSet.classes, "DenseNet Test", normalize=True)
 
     num_params = 0
     for name, param in model.named_parameters():
         if param.requires_grad: num_params += param.numel()
     print('Number of parameters in this model are %d ' % num_params)
 
+    onnx = torch.onnx.export(model, torch.randn(1, 3, 32, 32), CheckPointPath + '/' + 'FinalModel.onnx', dynamo=True)
     Writer.add_graph(model, torch.randn(1, 3, 32, 32))
     Writer.flush()
     Writer.close()
@@ -251,11 +253,11 @@ def main():
     # Parse Command Line arguments
     Parser = argparse.ArgumentParser()
     Parser.add_argument('--CheckPointPath', default='../Checkpoints/', help='Path to save Checkpoints, Default: ../Checkpoints/')
-    Parser.add_argument('--NumEpochs', type=int, default=1, help='Number of Epochs to Train for, Default:50')
+    Parser.add_argument('--NumEpochs', type=int, default=50, help='Number of Epochs to Train for, Default:50')
     Parser.add_argument('--DivTrain', type=int, default=1, help='Factor to reduce Train data by per epoch, Default:1')
     Parser.add_argument('--MiniBatchSize', type=int, default=128, help='Size of the MiniBatch to use, Default:1')
     Parser.add_argument('--LoadCheckPoint', type=int, default=0, help='Load Model from latest Checkpoint from CheckPointsPath?, Default:0')
-    Parser.add_argument('--LogsPath', default='Logs/ResNeXt', help='Path to save Logs for Tensorboard, Default=Logs/')
+    Parser.add_argument('--LogsPath', default='Logs/DenseNet', help='Path to save Logs for Tensorboard, Default=Logs/')
     TrainSet = torchvision.datasets.CIFAR10(root='./data', train=True,
                                         download=True, transform=ToTensor())
     TestSet = torchvision.datasets.CIFAR10(root='./data', train=False,
