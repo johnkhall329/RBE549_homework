@@ -212,3 +212,11 @@ CIFAR10/
 .vscode
 Logs/
 data/
+
+Tg_*
+Bg_*
+Cg_*
+ColorMap_*
+BrightnessMap_*
+TextonMap_*
+PbLite_*
