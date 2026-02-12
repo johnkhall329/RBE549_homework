@@ -2,8 +2,10 @@ import cv2
 import numpy as np
 # from scipy import optimize
 import glob
+import matplotlib.pyplot as plt
 from Homography import compute_homography, format_V
 from Calibration import extract_intrinsics, extract_extrinsics, optimize_params
+from Projection import reprojection_error, project_points_onto_image
 
 def wrapper():
     calib_folder = 'Calibration_Imgs'
@@ -36,10 +38,30 @@ def wrapper():
     V = np.vstack(vs)
     b = np.linalg.svd(V)[2][-1]
     K, lamda = extract_intrinsics(b)
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(obj_p, img_ps, img.shape[::-1], None, None)
+    # ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(obj_p, img_ps, img.shape[::-1], None, None)
     extrinsics = [extract_extrinsics(H, K, lamda) for H in hs]
     K, k1, k2 = optimize_params(K, obj_p, img_p, extrinsics)
-    print(K, k1, k2)
+    error = reprojection_error(K, (k1,k2), obj_p, img_p, extrinsics)
+
+    fig, axes = plt.subplots(4, 3, figsize=(10,5))
+    fig.suptitle('Reprojected Corners')
+    for i, img_path, obj_points, ext, ax in zip(range(len(calib_img_paths)), calib_img_paths, obj_p, extrinsics, axes.flatten()):
+        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        project_points_onto_image(img, K, (k1, k2), obj_points, ext)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img= cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+        ax.imshow(img)
+        ax.axis('off')
+        # cv2.imshow(f"Img_{i}", img)
+        # cv2.waitKey(1)
+    
+    print("Camera Matrix:\n", K)
+    print(f"k1: {k1}, k2: {k2}")
+    print(f"Reprojection Error: ", error)
+    plt.tight_layout()
+    plt.show()
+    # while True:
+    #     cv2.waitKey(10)
             
 
 if __name__ == '__main__':
