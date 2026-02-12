@@ -50,8 +50,8 @@ def compute_homography(obj_points, img_points):
     H_init = np.linalg.inv(t2)@Hp@t1
     H_init/= H_init[2,2]
 
-    # H = refine_homography(H_init, obj_points, img_points)
-    return H_init
+    H = refine_homography(H_init, obj_points, img_points)
+    return H
 
 def reprojection_residuals(h, obj_pts, img_pts):
     H = np.append(h, 1).reshape(3, 3)
